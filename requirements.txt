@@ -1,0 +1,5 @@
+fastapi==0.95.2
+uvicorn==0.23.2
+python-dotenv==1.0.0
+groq==0.17.0
+python-docx==1.1.0
