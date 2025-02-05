@@ -6,6 +6,12 @@ from docx import Document
 from io import BytesIO
 import os
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv()  # Add this line
+
+# Debug: Print the API key to verify it's loaded
+print("GROQ_API_KEY:", os.getenv("GROQ_API_KEY"))
 
 # Initialize FastAPI app
 app = FastAPI()
