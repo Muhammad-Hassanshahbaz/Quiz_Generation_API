@@ -1,0 +1,99 @@
+from groq import Groq
+from docx import Document
+import os
+import datetime
+import PyPDF2
+from tkinter import Tk, filedialog
+
+# Create your Groq client
+client = Groq(api_key="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")
+
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file."""
+    text = ""
+    with open(pdf_path, "rb") as pdf_file:
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+    return text
+
+def preprocess_text(text):
+    """Pre-process the input text."""
+    prompt = f"Normalize and simplify the following text for question generation:\n{text}"
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": "You are an expert in simplifying text for educational purposes."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=500
+    )
+    return response.choices[0].message.content.strip()
+
+def select_sentences(text, num_questions):
+    """Select important sentences for question generation."""
+    prompt = f"Select {num_questions} most important sentences from the following text:\n{text}"
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": f"You are an expert in identifying {num_questions} important sentences for quizzes."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=300
+    )
+    return response.choices[0].message.content.strip().split("\n")
+
+def generate_question(sentence, genre):
+    """Generate a question based on the sentence."""
+    prompt = f"Create a {genre} question from the following sentence. Do not include any introductory text like 'Here is a {genre} question:' or similar. Just provide the question:\n{sentence}"
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": f"You are an expert in generating {genre} quiz questions."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=200
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_quiz(text, num_questions, genre):
+    """Generate a full quiz from the given text."""
+    preprocessed_text = preprocess_text(text)
+    sentences = select_sentences(preprocessed_text, num_questions)
+    quiz = [generate_question(sentence, genre) for sentence in sentences]
+    return quiz
+
+def save_quiz_to_doc(quiz, genre, filename="quiz.docx"):
+    """Save the quiz questions to a Word document."""
+    doc = Document()
+    doc.add_heading(f'{genre.capitalize()} Quiz', 0)
+    for i, q in enumerate(quiz, start=1):
+        doc.add_paragraph(f"Question {i}:")
+        doc.add_paragraph(q)
+        doc.add_paragraph("\n")
+    doc.save(filename)
+    print(f"Quiz saved to {filename}")
+
+if __name__ == "__main__":
+    root = Tk()
+    root.withdraw()
+    pdf_path = filedialog.askopenfilename(title="Select a PDF File", filetypes=[("PDF Files", "*.pdf")])
+    
+    if pdf_path:
+        text = extract_text_from_pdf(pdf_path)
+        num_questions = int(input("Enter the number of questions: "))
+        genre = input("Enter question genre (e.g., 'multiple choice', 'true/false'): ")
+        
+        quiz = generate_quiz(text, num_questions, genre)
+        
+        for i, q in enumerate(quiz, start=1):
+            print(f"Question {i}: {q}\n")
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"quiz_{genre}_{timestamp}.docx"
+        save_quiz_to_doc(quiz, genre, filename)
+    else:
+        print("No file selected.")
+
+

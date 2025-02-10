@@ -1,0 +1,110 @@
+from groq import Groq
+from docx import Document
+import os
+import datetime
+
+# 1) Create your Groq client
+#    Use environment variable, or hardcode while testing internally
+client = Groq(api_key="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")
+
+def preprocess_text(text):
+    """
+    Pre-process the input text by normalizing, simplifying, and analyzing structure.
+    """
+    prompt = f"Normalize and simplify the following text for question generation:\n{text}"
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": "You are an expert in simplifying text for educational purposes."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=500
+    )
+    return response.choices[0].message.content.strip()
+
+def select_sentences(text, num_questions):
+    """
+    Select important sentences from the text for question generation.
+    Limits the number of questions to 'num_questions'.
+    """
+    prompt = f"Select {num_questions} most important sentences from the following text for creating quiz questions:\n{text}"
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": f"You are an expert in identifying {num_questions} important sentences for quizzes."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=300
+    )
+    return response.choices[0].message.content.strip().split("\n")
+
+def generate_question(sentence, genre):
+    """
+    Generate a question based on the sentence and the specified genre.
+    """
+    prompt = f"""Create a {genre} question from the following sentence.
+    Do not include any introductory text like 'Here is a {genre} question:' or similar.
+    Just provide the question:\n{sentence}"""
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": f"You are an expert in generating {genre} quiz questions."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=200
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_quiz(text, num_questions, genre):
+    """
+    Generate a full quiz with 'num_questions' number of questions from the given text.
+    """
+    # 1) Preprocess
+    preprocessed_text = preprocess_text(text)
+    # 2) Select sentences
+    sentences = select_sentences(preprocessed_text, num_questions)
+    # 3) Generate questions
+    quiz = []
+    for sentence in sentences:
+        question = generate_question(sentence, genre)
+        quiz.append(question)
+    return quiz
+
+def save_quiz_to_doc(quiz, genre, filename="quiz.docx"):
+    """
+    Save the generated quiz questions to a Word document.
+    """
+    doc = Document()
+    doc.add_heading(f'{genre.capitalize()} Quiz - Frequent Itemsets and Association Rules', 0)
+
+    for i, q in enumerate(quiz, start=1):
+        doc.add_paragraph(f"Question {i}:")
+        doc.add_paragraph(q)
+        doc.add_paragraph("\n")
+
+    doc.save(filename)
+    print(f"Quiz saved to {filename}")
+
+# Example usage
+if __name__ == "__main__":
+    text = """
+    Frequent itemsets and association rules are key concepts in data mining, specifically for understanding patterns in large datasets. Frequent itemsets are collections of items that frequently occur together in transactions. For example, in market basket analysis, frequent itemsets could reveal products often bought together. The support of an itemset is the proportion of transactions that contain the itemset. The Apriori algorithm is a popular method for finding frequent itemsets. It uses a bottom-up approach, where it first identifies frequent individual items and then extends them to larger itemsets, pruning those that don’t meet a minimum support threshold. Alternatively, the FP-growth algorithm is more efficient as it uses a divide-and-conquer approach and constructs a compact tree structure called the FP-tree to identify frequent itemsets, avoiding the need for candidate generation. Frequent itemset mining has applications in market basket analysis, recommender systems, and cross-selling strategies.
+    Association rules are relationships between items, typically represented as A→B, meaning if itemset A occurs, itemset B is likely to occur as well. The strength of an association rule is measured using support, confidence, and lift. Support measures how often an itemset appears in the dataset, confidence represents the probability of B occurring given A, and lift indicates how much more likely B is to occur when A occurs, compared to random chance. The Apriori algorithm is also used for generating association rules by first finding frequent itemsets and then deriving rules from those itemsets. Evaluating association rules involves checking the support, confidence, and lift to ensure they are meaningful and interesting. These rules are applied in various domains such as market basket analysis, web usage mining, recommender systems, and fraud detection
+    """
+    num_questions = input("Enter the number of questions you want to generate: ")
+
+    genre = input("Enter that which genre you want generate: ")  # Can be "fill in the blanks", "true/false", "question/answer", etc.
+
+    quiz = generate_quiz(text, num_questions, genre)
+
+    # Print quiz
+    for i, q in enumerate(quiz, start=1):
+        print(f"Question {i}:")
+        print(q)
+        print("\n")
+
+    # Save to docx
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"data_science_quiz_{genre}_{timestamp}.docx"
+    save_quiz_to_doc(quiz, genre, filename)
