@@ -92,7 +92,8 @@ def generate_quiz(text: str, num_questions: int) -> list:
         quiz.append(generate_question(sentence, "question/answer"))
         quiz.append(generate_question(sentence, "fill in the blanks"))
     return quiz
-
+ 
+ 
 def create_quiz_document(quiz: list) -> BytesIO:
     """Create DOCX in memory"""
     doc = Document()
