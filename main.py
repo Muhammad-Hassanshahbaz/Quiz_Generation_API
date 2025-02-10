@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
@@ -7,8 +7,9 @@ from io import BytesIO
 import os
 import datetime
 from dotenv import load_dotenv
+import PyPDF2
 
-load_dotenv()  # Add this line
+load_dotenv()  # Load environment variables
 
 # Debug: Print the API key to verify it's loaded
 print("GROQ_API_KEY:", os.getenv("GROQ_API_KEY"))
@@ -30,6 +31,14 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 class QuizRequest(BaseModel):
     text: str
     num_questions: int = 10
+
+def extract_text_from_pdf(file: UploadFile) -> str:
+    """Extract text from a PDF file."""
+    reader = PyPDF2.PdfFileReader(file.file)
+    text = ""
+    for page_num in range(reader.numPages):
+        text += reader.getPage(page_num).extract_text()
+    return text
 
 def preprocess_text(text: str) -> str:
     """Pre-process text for question generation"""
@@ -58,13 +67,13 @@ def select_sentences(text: str, num_questions: int) -> list:
     )
     return response.choices[0].message.content.strip().split("\n")
 
-def generate_question(sentence: str) -> str:
-    """Generate MCQ from sentence"""
-    prompt = f"Create a multiple-choice question from the following sentence:\n{sentence}"
+def generate_question(sentence: str, question_type: str) -> str:
+    """Generate a question from a sentence based on the specified type."""
+    prompt = f"Create a {question_type} question from the following sentence:\n{sentence}"
     response = client.chat.completions.create(
         model="llama3-70b-8192",
         messages=[
-            {"role": "system", "content": "You are an expert in generating quiz questions."},
+            {"role": "system", "content": f"You are an expert in generating {question_type} quiz questions."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=200
@@ -72,10 +81,17 @@ def generate_question(sentence: str) -> str:
     return response.choices[0].message.content.strip()
 
 def generate_quiz(text: str, num_questions: int) -> list:
-    """Generate full quiz"""
+    """Generate full quiz with various types of questions."""
     preprocessed_text = preprocess_text(text)
     sentences = select_sentences(preprocessed_text, num_questions)
-    return [generate_question(sentence) for sentence in sentences]
+    quiz = []
+    for sentence in sentences:
+        # Generate different types of questions
+        quiz.append(generate_question(sentence, "multiple-choice"))
+        quiz.append(generate_question(sentence, "true/false"))
+        quiz.append(generate_question(sentence, "question/answer"))
+        quiz.append(generate_question(sentence, "fill in the blanks"))
+    return quiz
 
 def create_quiz_document(quiz: list) -> BytesIO:
     """Create DOCX in memory"""
@@ -118,6 +134,22 @@ async def download_quiz_endpoint(request: QuizRequest):
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload-pdf/")
+async def upload_pdf(file: UploadFile = File(...)):
+    try:
+        text = extract_text_from_pdf(file)
+        quiz = generate_quiz(text, 10)  # Default to 10 questions
+        buffer = create_quiz_document(quiz)
+        
+        filename = f"quiz_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.docx"
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
