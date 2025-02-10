@@ -11,8 +11,5 @@
       "src": "/(.*)",
       "dest": "/main.py"
     }
-  ],
-  "env": {
-    "GROQ_API_KEY": "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"   
-  }  
+  ]
 }
