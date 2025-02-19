@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 
+
 class QuizRequest(BaseModel):
     text: str
     num_questions: int = 10
