@@ -6,7 +6,6 @@ from docx import Document
 from io import BytesIO
 import os
 import datetime
-from dotenv import load_dotenv
 import PyPDF2
 
 
