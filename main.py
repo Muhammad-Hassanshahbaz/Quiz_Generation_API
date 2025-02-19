@@ -9,13 +9,16 @@ import datetime
 from dotenv import load_dotenv
 import PyPDF2
 
-load_dotenv()  # Load environment variables
 
-# Debug: Print the API key to verify it's loaded
-print("GROQ_API_KEY:", os.getenv("GROQ_API_KEY"))
 
 # Initialize FastAPI app
 app = FastAPI()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is not set. Please add it to your environment variables.")
+
+client = Groq(api_key=GROQ_API_KEY)
 
 # Add CORS middleware
 app.add_middleware(
@@ -25,8 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Groq client
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 class QuizRequest(BaseModel):
     text: str
