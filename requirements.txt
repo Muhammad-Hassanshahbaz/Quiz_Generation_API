@@ -8,3 +8,4 @@ PyPDF2==3.0.1
 requests==2.31.0
 anyio==3.7.1
 typing-extensions>=4.10,<5
+python-multipart
