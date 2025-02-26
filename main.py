@@ -116,10 +116,17 @@ async def generate_quiz_endpoint(request: QuizRequest):
             raise HTTPException(status_code=400, detail="Text cannot be empty")
         if request.num_questions < 1:
             raise HTTPException(status_code=400, detail="Number of questions must be at least 1")
-            
+
         quiz = generate_quiz(request.text, request.num_questions)
-        return {"quiz": quiz}
-    
+
+        # Ensure proper structure before returning
+        structured_quiz = []
+        for q in quiz:
+            if isinstance(q, dict) and "question" in q:  # Ensure valid question structure
+                structured_quiz.append(q)
+
+        return {"quiz": structured_quiz}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
