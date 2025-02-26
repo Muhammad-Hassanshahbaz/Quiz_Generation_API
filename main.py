@@ -44,24 +44,28 @@ def extract_text_from_pdf(file: UploadFile) -> str:
 def preprocess_text(text: str) -> str:
     """Pre-process text for better question generation."""
     try:
-        prompt = f"Normalize and simplify the following text for quiz question generation:\n{text}"
+        prompt = (
+            "Normalize and simplify the following text, removing unnecessary details while keeping the key points for quiz generation:\n"
+            f"{text}"
+        )
         response = client.chat.completions.create(
             model="llama3-70b-8192",
             messages=[
                 {"role": "system", "content": "You are an expert in simplifying text for educational quizzes."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            temperature=0.5,  # Lower temperature for more precise results
             max_tokens=500
         )
         return response.choices[0].message.content.strip()
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text preprocessing error: {str(e)}")
 
 def select_sentences(text: str, num_questions: int) -> list:
     """Select key sentences to generate questions."""
     try:
-        prompt = f"Select {num_questions} important sentences from this text to create quiz questions:\n{text}"
+        prompt = f"Extract {num_questions} important sentences from this text for quiz question generation:\n{text}"
         response = client.chat.completions.create(
             model="llama3-70b-8192",
             messages=[
@@ -70,7 +74,16 @@ def select_sentences(text: str, num_questions: int) -> list:
             ],
             max_tokens=300
         )
-        return response.choices[0].message.content.strip().split("\n")
+
+        sentences = response.choices[0].message.content.strip().split("\n")
+
+        # Ensure valid selection
+        valid_sentences = [s for s in sentences if len(s.split()) > 5]  # Ignore too short sentences
+        if not valid_sentences:
+            raise ValueError("AI did not return valid sentences.")
+
+        return valid_sentences
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sentence selection error: {str(e)}")
 
@@ -86,7 +99,16 @@ def generate_question(sentence: str, question_type: str) -> dict:
             ],
             max_tokens=200
         )
-        return {"question": response.choices[0].message.content.strip(), "type": question_type}
+        
+        # Extract response text
+        generated_question = response.choices[0].message.content.strip()
+        
+        # Filter out invalid responses
+        if not generated_question or "I'm happy to help!" in generated_question:
+            raise ValueError("Invalid response from AI model.")
+        
+        return {"question": generated_question, "type": question_type}
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Question generation error: {str(e)}")
 
